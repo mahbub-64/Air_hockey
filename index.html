@@ -1,0 +1,882 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, user-scalable=no">
+<meta name="theme-color" content="#0a1222">
+<title>Air Hockey — play with friends</title>
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Ccircle cx='50' cy='50' r='42' fill='%2338bdf8'/%3E%3Ccircle cx='50' cy='50' r='24' fill='%230a1222'/%3E%3C/svg%3E">
+<style>
+:root{--bg:#0a1222;--panel:#101b33;--line:#20304f;--text:#e8eefb;--muted:#8fa2c4;--p0:#38bdf8;--p1:#fb7185;--accent:#22d3ee}
+*{box-sizing:border-box}
+html,body{height:100%;margin:0}
+body{background:radial-gradient(1200px 700px at 50% -10%,#16315a 0%,var(--bg) 60%) fixed;color:var(--text);
+  font:16px/1.4 system-ui,-apple-system,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;overscroll-behavior:none;
+  -webkit-tap-highlight-color:transparent;-webkit-user-select:none;user-select:none}
+input{-webkit-user-select:text;user-select:text}
+.hidden{display:none!important}
+.screen{position:fixed;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;
+  padding:max(16px,env(safe-area-inset-top)) 16px max(16px,env(safe-area-inset-bottom));overflow-y:auto}
+.card{width:100%;max-width:400px;background:linear-gradient(180deg,rgba(255,255,255,.04),rgba(255,255,255,.01)),var(--panel);
+  border:1px solid var(--line);border-radius:20px;padding:24px;box-shadow:0 20px 60px rgba(0,0,0,.45);
+  display:flex;flex-direction:column;gap:14px}
+.logo{display:flex;align-items:center;gap:12px}
+.logo h1{margin:0;font-size:30px;letter-spacing:.04em;text-transform:uppercase;font-weight:900}
+.puck{width:34px;height:34px;border-radius:50%;background:#0d121c;border:3px solid #e5edf9;box-shadow:0 0 18px rgba(56,189,248,.7),inset 0 0 0 5px #0d121c,inset 0 0 0 7px rgba(229,237,249,.35)}
+h2{margin:0;font-size:22px}
+.tag,.muted{margin:0;color:var(--muted);font-size:14px}
+.field{display:flex;flex-direction:column;gap:6px;font-size:13px;color:var(--muted)}
+input[type=text],input:not([type]){width:100%;background:#0b1530;border:1px solid var(--line);color:var(--text);border-radius:12px;
+  padding:12px 14px;font:inherit;outline:none}
+input:focus{border-color:var(--accent);box-shadow:0 0 0 3px rgba(34,211,238,.18)}
+.btn{appearance:none;border:1px solid var(--line);background:#16233f;color:var(--text);font:inherit;font-weight:700;
+  padding:13px 18px;border-radius:12px;cursor:pointer;transition:transform .08s,filter .15s}
+.btn:hover{filter:brightness(1.15)}
+.btn:active{transform:scale(.98)}
+.btn:disabled{opacity:.5;cursor:not-allowed}
+.btn.primary{background:linear-gradient(135deg,#22d3ee,#38bdf8 50%,#6366f1);border:0;color:#04101f}
+.btn.ghost{background:transparent}
+.or{display:flex;align-items:center;gap:10px;color:var(--muted);font-size:12px;text-transform:uppercase;letter-spacing:.08em}
+.or::before,.or::after{content:"";flex:1;height:1px;background:var(--line)}
+.join{display:flex;gap:8px}
+.join input{text-transform:uppercase;letter-spacing:.3em;text-align:center;font-weight:800;font-size:18px}
+.status{margin:0;min-height:1.2em;font-size:14px;color:var(--muted);text-align:center}
+.status.err{color:#fca5a5}
+.status.busy{color:var(--accent)}
+.invite{background:rgba(34,211,238,.1);border:1px solid rgba(34,211,238,.35);color:#a5f3fc;border-radius:12px;padding:10px 12px;font-size:14px}
+.foot{margin:16px 0 0;color:var(--muted);font-size:12px}
+.code{font-size:56px;font-weight:900;letter-spacing:.18em;text-align:center;padding:10px 0 10px .18em;
+  background:#0b1530;border:1px dashed var(--line);border-radius:14px;color:#fff;text-shadow:0 0 24px rgba(56,189,248,.6)}
+.waiting{display:flex;align-items:center;justify-content:center;gap:10px;margin:0;color:var(--muted);font-size:14px}
+.pulse{width:10px;height:10px;border-radius:50%;background:var(--accent);animation:pulse 1.2s infinite ease-in-out}
+@keyframes pulse{0%,100%{opacity:.3;transform:scale(.8)}50%{opacity:1;transform:scale(1.2)}}
+
+.practice{display:flex;flex-direction:column;gap:8px}
+.practice .lbl{font-size:13px;color:var(--muted)}
+.levels{display:flex;gap:8px}
+.levels .btn{flex:1;padding:11px 8px;background:transparent}
+.levels .btn.last{border-color:var(--accent);color:#a5f3fc}
+#game{justify-content:flex-start;padding:0;overflow:hidden}
+#hud{width:100%;display:flex;align-items:center;gap:8px;padding:max(8px,env(safe-area-inset-top)) 10px 8px}
+.scoreboard{flex:1;display:flex;gap:8px;min-width:0}
+.side{flex:1;display:flex;align-items:center;justify-content:space-between;gap:8px;padding:5px 12px;border-radius:12px;
+  background:rgba(255,255,255,.05);border:1px solid var(--line);border-left:4px solid var(--c,#888);min-width:0}
+.side.right{border-left:1px solid var(--line);border-right:4px solid var(--c,#888)}
+.nm{font-size:12px;color:var(--muted);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.sc{font-size:26px;font-weight:900;font-variant-numeric:tabular-nums}
+.icon{appearance:none;width:40px;height:40px;border-radius:12px;border:1px solid var(--line);background:#16233f;color:var(--text);
+  font-size:16px;cursor:pointer;flex:none}
+#stage{position:relative;flex:1;min-height:0;width:100%;display:flex;align-items:center;justify-content:center;overflow:hidden}
+#board{display:block;border-radius:18px;touch-action:none;cursor:none;box-shadow:0 10px 40px rgba(0,0,0,.5),0 0 0 3px #1c2d4d}
+#overlay{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:6px;
+  pointer-events:none;text-align:center;padding:20px}
+#overlay.dim{background:rgba(5,10,20,.6);backdrop-filter:blur(2px)}
+#big{font-size:min(22vw,96px);font-weight:900;letter-spacing:.02em;line-height:1;text-shadow:0 4px 30px rgba(0,0,0,.65)}
+#big[data-k=goal]{color:#fde047}
+#sub{color:#d5e0f5;font-size:15px;max-width:280px;text-shadow:0 2px 10px rgba(0,0,0,.8)}
+#actions{display:flex;gap:10px;margin-top:14px;pointer-events:auto}
+</style>
+<script src="https://cdn.jsdelivr.net/npm/peerjs@1.5.4/dist/peerjs.min.js"
+  onerror="var s=document.createElement('script');s.src='https://unpkg.com/peerjs@1.5.4/dist/peerjs.min.js';document.head.appendChild(s)"></script>
+</head>
+<body>
+
+<!-- HOME -->
+<main id="home" class="screen">
+  <div class="card">
+    <div class="logo"><span class="puck"></span><h1>Air Hockey</h1></div>
+    <p class="tag">Create a room, send the link to a friend, and play in real time.</p>
+    <div id="invite" class="invite hidden"></div>
+    <label class="field"><span>Your name</span>
+      <input id="nameInput" maxlength="12" placeholder="Player" autocomplete="off"></label>
+    <button id="btnCreate" class="btn primary">Create room</button>
+    <div class="or"><span>or join a friend</span></div>
+    <form id="joinForm" class="join">
+      <input id="codeInput" maxlength="5" placeholder="CODE" autocomplete="off" autocapitalize="characters" spellcheck="false">
+      <button id="btnJoin" class="btn" type="submit">Join</button>
+    </form>
+    <div class="practice">
+      <span class="lbl">Practice vs computer</span>
+      <div class="levels">
+        <button class="btn lvl" data-level="easy">Easy</button>
+        <button class="btn lvl" data-level="medium">Medium</button>
+        <button class="btn lvl" data-level="hard">Hard</button>
+      </div>
+    </div>
+    <p id="homeStatus" class="status"></p>
+  </div>
+  <p class="foot">Peer-to-peer · no accounts · first to 7 wins</p>
+  <noscript><p class="foot">This game needs JavaScript.</p></noscript>
+</main>
+
+<!-- LOBBY (host waiting) -->
+<main id="lobby" class="screen hidden">
+  <div class="card">
+    <h2>Room ready</h2>
+    <div id="roomCode" class="code">-----</div>
+    <p class="muted" style="text-align:center">Send this code or the invite link to your friend.</p>
+    <button id="btnCopy" class="btn primary">Copy invite link</button>
+    <button id="btnShare" class="btn hidden">Share…</button>
+    <p class="waiting"><span class="pulse"></span><span id="lobbyMsg">Waiting for your friend to join…</span></p>
+    <p class="muted" style="text-align:center;font-size:12px">Keep this tab open and in the foreground while you play.</p>
+    <button id="btnCancel" class="btn ghost">Cancel</button>
+  </div>
+</main>
+
+<!-- GAME -->
+<main id="game" class="screen hidden">
+  <header id="hud">
+    <button id="btnLeave" class="icon" aria-label="Leave game">✕</button>
+    <div class="scoreboard">
+      <div class="side" id="sideYou"><span class="nm" id="nmYou"></span><span class="sc" id="scYou">0</span></div>
+      <div class="side right" id="sideOpp"><span class="sc" id="scOpp">0</span><span class="nm" id="nmOpp"></span></div>
+    </div>
+    <button id="btnMute" class="icon" aria-label="Toggle sound">🔊</button>
+  </header>
+  <div id="stage">
+    <canvas id="board"></canvas>
+    <div id="overlay">
+      <div id="big"></div>
+      <div id="sub"></div>
+      <div id="actions" class="hidden">
+        <button id="btnRematch" class="btn primary">Rematch</button>
+        <button id="btnLeave2" class="btn ghost">Leave</button>
+      </div>
+    </div>
+  </div>
+</main>
+
+<script>
+(() => {
+'use strict';
+const $ = id => document.getElementById(id);
+
+/* =====================================================================
+   SIMULATION  (no DOM access — runs on the host / in practice mode)
+   Tweak the constants below to change how the game feels.
+   ===================================================================== */
+/*SIM-START*/
+const W = 500, H = 800;                 // table size in game units
+const PUCK_R = 22, PADDLE_R = 38;
+const GOAL_W = 210;                     // width of each goal opening
+const WIN_SCORE = 7;
+const MAX_PUCK_SPEED = 1650;            // units / second
+const PADDLE_MAX_SPEED = 3200;
+// Computer difficulty:
+//   speed = paddle top speed, delay = how late it notices the puck (seconds),
+//   track = how closely it follows the puck while defending, aimErr = random aim error (units),
+//   attackMaxSpeed = it only attacks when the puck is slower than this,
+//   predict = how well it anticipates shots (0..1), defendY = where it guards its goal.
+const DIFFICULTY = {
+  easy:   { speed: 520,  delay: 0.30, track: 0.55, aimErr: 150, attackMaxSpeed: 500,  predict: 0,   defendY: 120 },
+  medium: { speed: 800,  delay: 0.15, track: 0.75, aimErr: 70,  attackMaxSpeed: 1000, predict: 0.4, defendY: 105 },
+  hard:   { speed: 1000, delay: 0.05, track: 0.90, aimErr: 25,  attackMaxSpeed: 1e9,  predict: 0.7, defendY: 95 }
+};
+const PADDLE_FOLLOW = 32;               // how snappily paddles follow the pointer
+const FRICTION = 0.18;                  // puck slow-down per second
+const WALL_BOUNCE = 0.92;
+const PADDLE_BOUNCE = 0.85;
+const STEP = 1 / 240;                   // physics sub-step
+
+const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
+const r1 = v => Math.round(v * 10) / 10;
+const mkPad = (x, y) => ({ x, y, tx: x, ty: y, vx: 0, vy: 0 });
+
+const G = {
+  level: 'medium',       // computer difficulty: easy | medium | hard
+  mode: 'idle',          // idle | host | guest | cpu
+  phase: 'idle',         // idle | waiting | countdown | playing | goal | over
+  timer: 0,
+  scores: [0, 0],
+  lastScorer: -1,
+  me: 0,                 // which player I am (0 = bottom/host, 1 = top/guest)
+  names: ['Player 1', 'Player 2'],
+  puck: { x: W / 2, y: H / 2, vx: 0, vy: 0 },
+  pad: [mkPad(W / 2, H - 110), mkPad(W / 2, 110)],
+  out: [],               // sound events queued for the guest
+  seq: 0
+};
+let acc = 0;
+const cpu = { clock: 0, mem: [], attacking: false, aim: 0 };   // the computer's short-term memory
+const cpuCfg = () => DIFFICULTY[G.level] || DIFFICULTY.medium;
+
+function emit(kind, k) {
+  playEvent(kind, k);
+  if (G.mode === 'host') G.out.push([kind, Math.round(k * 100) / 100]);
+}
+
+function clampTarget(i, x, y) {
+  const lo = i === 0 ? H / 2 + PADDLE_R : PADDLE_R;
+  const hi = i === 0 ? H - PADDLE_R : H / 2 - PADDLE_R;
+  return [clamp(x, PADDLE_R, W - PADDLE_R), clamp(y, lo, hi)];
+}
+
+function movePaddle(p, dt, vmax) {
+  const dx = p.tx - p.x, dy = p.ty - p.y;
+  const a = 1 - Math.exp(-PADDLE_FOLLOW * dt);
+  let sx = dx * a, sy = dy * a;
+  const len = Math.hypot(sx, sy), cap = vmax * dt;
+  if (len > cap) { sx *= cap / len; sy *= cap / len; }
+  p.x += sx; p.y += sy;
+  p.vx = sx / dt; p.vy = sy / dt;
+}
+
+function placePuck(server) {
+  const p = G.puck;
+  p.x = W / 2;
+  p.y = server === 0 ? H / 2 + 120 : H / 2 - 120;
+  p.vx = p.vy = 0;
+}
+
+function resetMatch() {
+  G.scores = [0, 0]; G.lastScorer = -1;
+  const a = G.pad[0], b = G.pad[1];
+  a.x = a.tx = W / 2; a.y = a.ty = H - 110; a.vx = a.vy = 0;
+  b.x = b.tx = W / 2; b.y = b.ty = 110;     b.vx = b.vy = 0;
+  placePuck(Math.random() < 0.5 ? 0 : 1);
+  G.phase = 'countdown'; G.timer = 3; acc = 0;
+  cpu.clock = 0; cpu.mem.length = 0; cpu.attacking = false;
+}
+
+function collidePaddle(q) {
+  const p = G.puck;
+  const dx = p.x - q.x, dy = p.y - q.y, min = PUCK_R + PADDLE_R;
+  const d2 = dx * dx + dy * dy;
+  if (d2 >= min * min) return;
+  const d = Math.sqrt(d2);
+  let nx, ny;
+  if (d < 1e-6) { nx = 0; ny = q === G.pad[0] ? -1 : 1; } else { nx = dx / d; ny = dy / d; }
+  p.x = q.x + nx * min; p.y = q.y + ny * min;
+  const vn = (p.vx - q.vx) * nx + (p.vy - q.vy) * ny;
+  if (vn < 0) {
+    p.vx -= (1 + PADDLE_BOUNCE) * vn * nx;
+    p.vy -= (1 + PADDLE_BOUNCE) * vn * ny;
+    if (-vn > 60) emit('h', Math.min(1, -vn / 1400));
+  }
+}
+
+function collidePost(px, py) {
+  const p = G.puck, dx = p.x - px, dy = p.y - py, d = Math.hypot(dx, dy);
+  if (d >= PUCK_R || d < 1e-6) return;
+  const nx = dx / d, ny = dy / d;
+  p.x = px + nx * PUCK_R; p.y = py + ny * PUCK_R;
+  const vn = p.vx * nx + p.vy * ny;
+  if (vn < 0) {
+    p.vx -= (1 + WALL_BOUNCE) * vn * nx;
+    p.vy -= (1 + WALL_BOUNCE) * vn * ny;
+    if (-vn > 80) emit('w', Math.min(1, -vn / 1200));
+  }
+}
+
+function collideBoundary() {
+  const p = G.puck, R = PUCK_R, cx = W / 2, gh = GOAL_W / 2;
+  collidePost(cx - gh, 0); collidePost(cx + gh, 0);
+  collidePost(cx - gh, H); collidePost(cx + gh, H);
+  const wallHit = s => { if (s > 80) emit('w', Math.min(1, s / 1200)); };
+  if (p.x < R)     { p.x = R;     if (p.vx < 0) { wallHit(-p.vx); p.vx = -p.vx * WALL_BOUNCE; } }
+  if (p.x > W - R) { p.x = W - R; if (p.vx > 0) { wallHit(p.vx);  p.vx = -p.vx * WALL_BOUNCE; } }
+  if (p.y < 0 || p.y > H) {
+    // inside a goal pocket: keep the puck between the pocket walls
+    const lo = cx - gh + R, hi = cx + gh - R;
+    if (p.x < lo) { p.x = lo; if (p.vx < 0) p.vx = -p.vx * WALL_BOUNCE; }
+    if (p.x > hi) { p.x = hi; if (p.vx > 0) p.vx = -p.vx * WALL_BOUNCE; }
+  } else if (Math.abs(p.x - cx) > gh) {
+    // end walls (everywhere except the goal mouths)
+    if (p.y < R)     { p.y = R;     if (p.vy < 0) { wallHit(-p.vy); p.vy = -p.vy * WALL_BOUNCE; } }
+    if (p.y > H - R) { p.y = H - R; if (p.vy > 0) { wallHit(p.vy);  p.vy = -p.vy * WALL_BOUNCE; } }
+  }
+}
+
+function goal(scorer) {
+  G.scores[scorer]++;
+  G.lastScorer = scorer;
+  G.puck.vx = G.puck.vy = 0;
+  emit('g', 1);
+  if (G.scores[scorer] >= WIN_SCORE) { G.phase = 'over'; G.timer = 0; }
+  else { G.phase = 'goal'; G.timer = 1.4; }
+}
+
+function stepPuck(dt) {
+  const p = G.puck;
+  p.x += p.vx * dt; p.y += p.vy * dt;
+  const f = Math.exp(-FRICTION * dt);
+  p.vx *= f; p.vy *= f;
+  collidePaddle(G.pad[0]);
+  collidePaddle(G.pad[1]);
+  collideBoundary();
+  const sp = Math.hypot(p.vx, p.vy);
+  if (sp > MAX_PUCK_SPEED) { p.vx *= MAX_PUCK_SPEED / sp; p.vy *= MAX_PUCK_SPEED / sp; }
+  if (p.y < -PUCK_R) goal(0);
+  else if (p.y > H + PUCK_R) goal(1);
+}
+
+function stepOnce(dt) {
+  movePaddle(G.pad[0], dt, PADDLE_MAX_SPEED);
+  movePaddle(G.pad[1], dt, G.mode === 'cpu' ? cpuCfg().speed : PADDLE_MAX_SPEED);
+  if (G.phase === 'playing') {
+    stepPuck(dt);
+  } else if (G.phase === 'countdown') {
+    G.timer -= dt;
+    if (G.timer <= 0) { G.phase = 'playing'; G.timer = 0; }
+  } else if (G.phase === 'goal') {
+    G.timer -= dt;
+    if (G.timer <= 0) { placePuck(1 - G.lastScorer); G.phase = 'countdown'; G.timer = 2; }
+  }
+}
+
+function simulate(dt) {
+  acc += dt;
+  let n = 0;
+  while (acc >= STEP && n++ < 40) { stepOnce(STEP); acc -= STEP; }
+  if (acc > STEP) acc = 0;
+}
+
+// Computer opponent (plays the top paddle). The level changes how fast it moves, how late it
+// notices the puck, how accurately it aims, and how well it anticipates shots.
+function predictX(pk, ty) {
+  if (pk.vy > -30) return pk.x;               // puck isn't heading for the computer's goal
+  const t = (pk.y - ty) / -pk.vy;
+  const L = W - 2 * PUCK_R;
+  let m = (pk.x + pk.vx * t - PUCK_R) % (2 * L);
+  if (m < 0) m += 2 * L;
+  return PUCK_R + (m <= L ? m : 2 * L - m);  // fold bounces off the side walls
+}
+
+function cpuThink(dt) {
+  const cfg = cpuCfg(), c = G.pad[1], pk = G.puck;
+  cpu.clock += dt;
+  cpu.mem.push({ t: cpu.clock, x: pk.x, y: pk.y });
+  while (cpu.mem.length > 1 && cpu.mem[1].t <= cpu.clock - cfg.delay) cpu.mem.shift();
+  const p = cpu.mem[0];                       // where the computer *thinks* the puck is
+  const speed = Math.hypot(pk.vx, pk.vy);
+  let tx = W / 2, ty = 105;
+  if (G.phase === 'playing') {
+    if (p.y < H / 2 + 25 && speed <= cfg.attackMaxSpeed) {
+      if (!cpu.attacking) { cpu.attacking = true; cpu.aim = (Math.random() * 2 - 1) * cfg.aimErr; }
+      const gx = W / 2 + cpu.aim - p.x, gy = H - p.y, gl = Math.hypot(gx, gy) || 1;
+      const ux = gx / gl, uy = gy / gl;           // direction: puck -> (slightly wrong) target
+      const rx = c.x - p.x, ry = c.y - p.y;
+      const along = rx * ux + ry * uy;            // < 0: my paddle is behind the puck
+      const cross = rx * uy - ry * ux;
+      const lateral = Math.abs(cross);
+      if (along < -10 && lateral < 60) {          // strike through the puck
+        tx = p.x + ux * 45; ty = p.y + uy * 45;
+      } else if (along >= -10 && lateral < 90) {  // in the way: sidestep around it
+        const side = cross >= 0 ? 1 : -1;
+        tx = p.x - ux * 80 + uy * side * 100;
+        ty = p.y - uy * 80 - ux * side * 100;
+      } else {                                    // line up behind the puck
+        tx = p.x - ux * 95; ty = p.y - uy * 95;
+      }
+    } else {                                      // defend
+      cpu.attacking = false;
+      const px = p.x + (predictX(pk, cfg.defendY) - p.x) * cfg.predict;
+      tx = W / 2 + (clamp(px, 60, W - 60) - W / 2) * cfg.track;
+      ty = cfg.defendY;
+    }
+  } else cpu.attacking = false;
+  const t = clampTarget(1, tx, ty);
+  c.tx = t[0]; c.ty = t[1];
+}
+/*SIM-END*/
+
+/* =====================================================================
+   AUDIO
+   ===================================================================== */
+let audioCtx = null, muted = false;
+try { muted = localStorage.getItem('ah_muted') === '1'; } catch (e) {}
+
+function ensureAudio() {
+  if (!audioCtx) {
+    try { audioCtx = new (window.AudioContext || window.webkitAudioContext)(); } catch (e) {}
+  }
+  if (audioCtx && audioCtx.state === 'suspended') audioCtx.resume();
+}
+function tone(freq, dur, type, vol, slide) {
+  if (muted || !audioCtx) return;
+  const t = audioCtx.currentTime;
+  const o = audioCtx.createOscillator(), g = audioCtx.createGain();
+  o.type = type || 'sine';
+  o.frequency.setValueAtTime(freq, t);
+  if (slide) o.frequency.exponentialRampToValueAtTime(Math.max(40, freq + slide), t + dur);
+  g.gain.setValueAtTime(vol, t);
+  g.gain.exponentialRampToValueAtTime(0.0001, t + dur);
+  o.connect(g); g.connect(audioCtx.destination);
+  o.start(t); o.stop(t + dur + 0.03);
+}
+function playEvent(kind, k) {
+  if (kind === 'h') tone(300 + k * 320, 0.09, 'triangle', 0.08 + 0.17 * k, -140);
+  else if (kind === 'w') tone(170, 0.07, 'sine', 0.05 + 0.1 * k);
+  else if (kind === 'g') {
+    tone(523, 0.14, 'square', 0.06);
+    setTimeout(() => tone(659, 0.14, 'square', 0.06), 120);
+    setTimeout(() => tone(784, 0.28, 'square', 0.06), 240);
+  }
+  else if (kind === 'c') tone(620, 0.1, 'sine', 0.1);
+  else if (kind === 'go') tone(990, 0.22, 'sine', 0.12);
+}
+
+/* =====================================================================
+   RENDERING
+   ===================================================================== */
+const COLORS = ['#38bdf8', '#fb7185'];     // player 0 = blue, player 1 = rose
+const canvas = $('board'), ctx = canvas.getContext('2d');
+const tableCanvas = document.createElement('canvas'), tctx = tableCanvas.getContext('2d');
+const flip = () => G.mode === 'guest';     // guests see the table rotated so they play from the bottom
+
+function buildTable() {
+  const t = tctx, cx = W / 2, gh = GOAL_W / 2;
+  t.setTransform(tableCanvas.width / W, 0, 0, tableCanvas.height / H, 0, 0);
+  if (flip()) { t.translate(W, H); t.rotate(Math.PI); }
+  const g = t.createRadialGradient(cx, H / 2, 40, cx, H / 2, H * 0.7);
+  g.addColorStop(0, '#15406b'); g.addColorStop(1, '#0a1c36');
+  t.fillStyle = g; t.fillRect(-4, -4, W + 8, H + 8);
+  // air holes
+  t.fillStyle = 'rgba(180,220,255,0.07)';
+  for (let y = 14, row = 0; y < H; y += 24, row++)
+    for (let x = 14 + (row % 2) * 12; x < W; x += 24) { t.beginPath(); t.arc(x, y, 1.6, 0, Math.PI * 2); t.fill(); }
+  // markings
+  t.lineWidth = 3; t.strokeStyle = 'rgba(255,255,255,.35)';
+  t.beginPath(); t.moveTo(0, H / 2); t.lineTo(W, H / 2); t.stroke();
+  t.strokeStyle = 'rgba(255,255,255,.22)';
+  t.beginPath(); t.arc(cx, H / 2, 70, 0, Math.PI * 2); t.stroke();
+  t.fillStyle = 'rgba(255,255,255,.35)'; t.beginPath(); t.arc(cx, H / 2, 7, 0, Math.PI * 2); t.fill();
+  t.lineWidth = 3;
+  t.strokeStyle = 'rgba(251,113,133,.35)'; t.beginPath(); t.arc(cx, 0, gh + 30, 0, Math.PI); t.stroke();
+  t.strokeStyle = 'rgba(56,189,248,.35)';  t.beginPath(); t.arc(cx, H, gh + 30, Math.PI, Math.PI * 2); t.stroke();
+  // rails (with gaps at the goals)
+  t.lineWidth = 12; t.strokeStyle = 'rgba(207,224,245,.92)'; t.lineCap = 'butt';
+  const line = (x1, y1, x2, y2) => { t.beginPath(); t.moveTo(x1, y1); t.lineTo(x2, y2); t.stroke(); };
+  line(0, 0, 0, H); line(W, 0, W, H);
+  line(0, 0, cx - gh, 0); line(cx + gh, 0, W, 0);
+  line(0, H, cx - gh, H); line(cx + gh, H, W, H);
+  // goal mouths glow in each player's colour
+  t.save();
+  t.lineWidth = 8; t.shadowBlur = 22 * (tableCanvas.width / W);
+  t.shadowColor = COLORS[1]; t.strokeStyle = COLORS[1]; line(cx - gh, 0, cx + gh, 0);
+  t.shadowColor = COLORS[0]; t.strokeStyle = COLORS[0]; line(cx - gh, H, cx + gh, H);
+  t.restore();
+  // posts
+  t.fillStyle = '#e8f1ff';
+  for (const [px, py] of [[cx - gh, 0], [cx + gh, 0], [cx - gh, H], [cx + gh, H]]) {
+    t.beginPath(); t.arc(px, py, 8, 0, Math.PI * 2); t.fill();
+  }
+}
+
+function resize() {
+  const stage = $('stage');
+  const aw = stage.clientWidth - 16, ah = stage.clientHeight - 12;
+  if (aw < 50 || ah < 50) return;
+  const scale = Math.min(aw / W, ah / H);
+  const dpr = Math.min(window.devicePixelRatio || 1, 2.5);
+  const cw = Math.floor(W * scale), ch = Math.floor(H * scale);
+  canvas.style.width = cw + 'px'; canvas.style.height = ch + 'px';
+  canvas.width = Math.round(cw * dpr); canvas.height = Math.round(ch * dpr);
+  tableCanvas.width = canvas.width; tableCanvas.height = canvas.height;
+  buildTable();
+}
+new ResizeObserver(resize).observe($('stage'));
+
+function drawPaddle(x, y, color, k) {
+  ctx.save();
+  ctx.shadowColor = color; ctx.shadowBlur = 22 * k;
+  ctx.beginPath(); ctx.arc(x, y, PADDLE_R, 0, Math.PI * 2); ctx.fillStyle = color; ctx.fill();
+  ctx.shadowBlur = 0;
+  ctx.beginPath(); ctx.arc(x, y, PADDLE_R * 0.64, 0, Math.PI * 2); ctx.fillStyle = 'rgba(0,0,0,.28)'; ctx.fill();
+  ctx.beginPath(); ctx.arc(x, y, PADDLE_R * 0.42, 0, Math.PI * 2); ctx.fillStyle = color; ctx.fill();
+  ctx.beginPath(); ctx.arc(x - 6, y - 7, PADDLE_R * 0.13, 0, Math.PI * 2); ctx.fillStyle = 'rgba(255,255,255,.55)'; ctx.fill();
+  ctx.restore();
+}
+function drawPuck(x, y, k) {
+  ctx.save();
+  ctx.shadowColor = 'rgba(255,255,255,.55)'; ctx.shadowBlur = 14 * k;
+  ctx.beginPath(); ctx.arc(x, y, PUCK_R, 0, Math.PI * 2); ctx.fillStyle = '#0d121c'; ctx.fill();
+  ctx.shadowBlur = 0; ctx.lineWidth = 3; ctx.strokeStyle = '#e5edf9'; ctx.stroke();
+  ctx.beginPath(); ctx.arc(x, y, PUCK_R * 0.55, 0, Math.PI * 2);
+  ctx.lineWidth = 2; ctx.strokeStyle = 'rgba(229,237,249,.35)'; ctx.stroke();
+  ctx.restore();
+}
+function draw() {
+  if (!canvas.width) return;
+  const kx = canvas.width / W, ky = canvas.height / H;
+  ctx.setTransform(1, 0, 0, 1, 0, 0);
+  ctx.drawImage(tableCanvas, 0, 0);
+  ctx.setTransform(kx, 0, 0, ky, 0, 0);
+  if (flip()) { ctx.translate(W, H); ctx.rotate(Math.PI); }
+  const pk = G.mode === 'guest' ? puckView : G.puck;
+  drawPaddle(G.pad[0].x, G.pad[0].y, COLORS[0], kx);
+  drawPaddle(G.pad[1].x, G.pad[1].y, COLORS[1], kx);
+  if (G.phase !== 'goal' && G.phase !== 'over' || (pk.y > -PUCK_R && pk.y < H + PUCK_R)) drawPuck(pk.x, pk.y, kx);
+}
+
+/* =====================================================================
+   INPUT
+   ===================================================================== */
+const input = { x: W / 2, y: H - 110 };
+function setInput(e) {
+  const r = canvas.getBoundingClientRect();
+  let x = (e.clientX - r.left) / r.width * W, y = (e.clientY - r.top) / r.height * H;
+  if (G.mode === 'guest') { x = W - x; y = H - y; }
+  input.x = x; input.y = y;
+}
+canvas.addEventListener('pointerdown', e => { ensureAudio(); try { canvas.setPointerCapture(e.pointerId); } catch (_) {} setInput(e); });
+canvas.addEventListener('pointermove', setInput);
+canvas.addEventListener('contextmenu', e => e.preventDefault());
+
+/* =====================================================================
+   NETWORKING  (PeerJS = WebRTC data channel; the free public PeerJS broker
+   is only used to introduce the two browsers — game traffic is direct)
+   ===================================================================== */
+const PREFIX = 'hockey-room-';
+const CODE_CHARS = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
+let peer = null, conn = null, roomCode = '', joinTimer = 0;
+let snap = null, lastSeq = -1, hostPadT = { x: W / 2, y: H - 110 };
+const puckView = { x: W / 2, y: H / 2 };
+let lastSend = 0, lastInputSent = '', lastInputAt = 0;
+
+const cleanName = s => String(s || '').replace(/[\u0000-\u001f<>]/g, '').trim().slice(0, 12);
+const randomCode = () => Array.from({ length: 5 }, () => CODE_CHARS[Math.floor(Math.random() * CODE_CHARS.length)]).join('');
+const inviteLink = () => location.href.split(/[?#]/)[0] + '?room=' + roomCode;
+
+function getName() {
+  const n = cleanName($('nameInput').value);
+  try { localStorage.setItem('ah_name', n); } catch (e) {}
+  return n;
+}
+function netErrorText(err) {
+  switch (err && err.type) {
+    case 'network': case 'server-error': case 'socket-error': case 'socket-closed':
+      return "Couldn't reach the matchmaking server. Check your connection and try again.";
+    case 'browser-incompatible': return "This browser doesn't support WebRTC.";
+    default: return 'Connection error' + (err && err.type ? ' (' + err.type + ')' : '') + '. Please try again.';
+  }
+}
+
+function leaveAll() {
+  clearTimeout(joinTimer);
+  const c = conn, p = peer; conn = null; peer = null;
+  try { if (c) { c.removeAllListeners(); c.close(); } } catch (e) {}
+  try { if (p) { p.removeAllListeners(); p.destroy(); } } catch (e) {}
+  G.mode = 'idle'; G.phase = 'idle'; G.out = [];
+  snap = null; lastSeq = -1;
+  setBusy(false);
+}
+function fail(msg) { leaveAll(); showScreen('home'); setStatus(msg, 'err'); }
+
+/* ---- host ---- */
+function createRoom() {
+  if (typeof Peer === 'undefined') { setStatus('Multiplayer library failed to load. Check your connection and reload.', 'err'); return; }
+  ensureAudio();
+  leaveAll();
+  G.mode = 'host'; G.me = 0; G.phase = 'waiting';
+  G.names = [getName() || 'Player 1', 'Player 2'];
+  setBusy(true); setStatus('Creating room…', 'busy');
+  openRoom(0);
+}
+function openRoom(attempt) {
+  const code = randomCode();
+  const p = new Peer(PREFIX + code);
+  peer = p;
+  p.on('open', () => {
+    if (peer !== p) return;
+    roomCode = code;
+    $('roomCode').textContent = code;
+    $('lobbyMsg').textContent = 'Waiting for your friend to join…';
+    setBusy(false); setStatus('');
+    showScreen('lobby');
+  });
+  p.on('connection', onGuestConnection);
+  p.on('disconnected', () => { if (peer === p && !p.destroyed) { try { p.reconnect(); } catch (e) {} } });
+  p.on('error', err => {
+    if (peer !== p) return;
+    if (err.type === 'unavailable-id' && attempt < 5) { peer = null; p.removeAllListeners(); p.destroy(); openRoom(attempt + 1); return; }
+    fail(netErrorText(err));
+  });
+}
+function onGuestConnection(c) {
+  if (G.mode !== 'host') { c.close(); return; }
+  if (conn && conn.open) {
+    c.on('open', () => { try { c.send({ t: 'full' }); } catch (e) {} setTimeout(() => c.close(), 400); });
+    return;
+  }
+  if (conn) { conn.removeAllListeners(); conn.close(); }
+  conn = c;
+  c.on('data', d => hostOnData(c, d));
+  c.on('close', () => { if (conn === c) guestLeft(); });
+  c.on('error', () => { if (conn === c) guestLeft(); });
+}
+function hostOnData(c, d) {
+  if (!d || typeof d !== 'object') return;
+  if (d.t === 'hi') {
+    let gn = cleanName(d.name) || 'Player 2';
+    if (gn.toLowerCase() === G.names[0].toLowerCase()) gn += ' 2';
+    G.names[1] = gn;
+    try { c.send({ t: 'init', names: G.names, win: WIN_SCORE }); } catch (e) {}
+    G.seq = 0;
+    beginMatch();
+  } else if (d.t === 'm') {
+    if (Number.isFinite(d.x) && Number.isFinite(d.y)) {
+      const t = clampTarget(1, d.x, d.y);
+      G.pad[1].tx = t[0]; G.pad[1].ty = t[1];
+    }
+  } else if (d.t === 'rematch') {
+    if (G.phase === 'over') beginMatch();
+  }
+}
+function guestLeft() {
+  conn = null;
+  G.phase = 'waiting'; G.out = [];
+  $('lobbyMsg').textContent = 'Your friend left. Waiting for someone to join…';
+  showScreen('lobby');
+}
+
+/* ---- guest ---- */
+function joinRoom(code) {
+  if (typeof Peer === 'undefined') { setStatus('Multiplayer library failed to load. Check your connection and reload.', 'err'); return; }
+  ensureAudio();
+  leaveAll();
+  G.mode = 'guest'; G.me = 1; G.phase = 'idle';
+  roomCode = code;
+  setBusy(true); setStatus('Joining room ' + code + '…', 'busy');
+  const p = new Peer();
+  peer = p;
+  joinTimer = setTimeout(() => {
+    if (peer === p) fail("Couldn't connect. The host may have left, or your network blocks peer-to-peer connections.");
+  }, 15000);
+  p.on('open', () => {
+    if (peer !== p) return;
+    const c = p.connect(PREFIX + code, { reliable: false, serialization: 'json' });
+    conn = c;
+    c.on('open', () => { try { c.send({ t: 'hi', name: getName() }); } catch (e) {} });
+    c.on('data', guestOnData);
+    c.on('close', () => { if (conn === c) hostLeft(); });
+    c.on('error', () => { if (conn === c) hostLeft(); });
+  });
+  p.on('error', err => {
+    if (peer !== p) return;
+    if (err.type === 'peer-unavailable') fail('Room ' + code + " wasn't found. Check the code and try again.");
+    else fail(netErrorText(err));
+  });
+}
+function hostLeft() {
+  if (G.mode !== 'guest') return;
+  fail('The host left the room.');
+}
+function guestOnData(d) {
+  if (!d || typeof d !== 'object') return;
+  if (d.t === 'init') {
+    clearTimeout(joinTimer);
+    const n = Array.isArray(d.names) ? d.names : [];
+    G.names = [cleanName(n[0]) || 'Host', cleanName(n[1]) || 'You'];
+    G.mode = 'guest'; G.me = 1;
+    G.phase = 'countdown'; G.timer = 3; G.scores = [0, 0]; G.lastScorer = -1;
+    const b = G.pad[1]; b.x = b.tx = W / 2; b.y = b.ty = 110; b.vx = b.vy = 0;
+    G.pad[0].x = W / 2; G.pad[0].y = H - 110;
+    hostPadT = { x: W / 2, y: H - 110 };
+    puckView.x = W / 2; puckView.y = H / 2;
+    snap = null; lastSeq = -1;
+    input.x = W / 2; input.y = 110;
+    setStatus('');
+    showScreen('game');
+  } else if (d.t === 'full') {
+    fail('That room is full.');
+  } else if (d.t === 's') {
+    if (G.mode !== 'guest') return;
+    if (Array.isArray(d.ev)) for (const e of d.ev) playEvent(e[0], e[1]);
+    if (typeof d.n !== 'number' || d.n <= lastSeq) return;
+    lastSeq = d.n;
+    G.phase = d.st; G.timer = d.tm; G.scores = d.sc; G.lastScorer = d.ls;
+    snap = { x: d.p[0], y: d.p[1], vx: d.p[2], vy: d.p[3], t: performance.now() };
+    hostPadT = { x: d.a[0], y: d.a[1] };
+  }
+}
+
+function sendSnapshot(now) {
+  if (!conn || !conn.open || now - lastSend < 15) return;
+  lastSend = now;
+  const p = G.puck;
+  try {
+    conn.send({
+      t: 's', n: ++G.seq, st: G.phase, tm: Math.round(G.timer * 100) / 100,
+      sc: G.scores, ls: G.lastScorer,
+      p: [r1(p.x), r1(p.y), r1(p.vx), r1(p.vy)],
+      a: [r1(G.pad[0].x), r1(G.pad[0].y)],
+      ev: G.out.length ? G.out : undefined
+    });
+  } catch (e) {}
+  G.out = [];
+}
+
+/* =====================================================================
+   MAIN LOOP
+   ===================================================================== */
+function updateHost(dt, now) {
+  const t = clampTarget(0, input.x, input.y);
+  G.pad[0].tx = t[0]; G.pad[0].ty = t[1];
+  if (G.mode === 'cpu') cpuThink(dt);
+  simulate(dt);
+  if (G.mode === 'host') sendSnapshot(now);
+}
+function updateGuest(dt, now) {
+  const p1 = G.pad[1];
+  const t = clampTarget(1, input.x, input.y);
+  p1.tx = t[0]; p1.ty = t[1];
+  movePaddle(p1, dt, PADDLE_MAX_SPEED);          // my paddle reacts instantly (client-side)
+  // tell the host where my paddle should go
+  const key = Math.round(t[0]) + ',' + Math.round(t[1]);
+  if (conn && conn.open && now - lastInputAt >= 16 && (key !== lastInputSent || now - lastInputAt > 250)) {
+    try { conn.send({ t: 'm', x: Math.round(t[0]), y: Math.round(t[1]) }); } catch (e) {}
+    lastInputSent = key; lastInputAt = now;
+  }
+  // smooth the host paddle and the puck between snapshots
+  const a = 1 - Math.exp(-30 * dt);
+  G.pad[0].x += (hostPadT.x - G.pad[0].x) * a;
+  G.pad[0].y += (hostPadT.y - G.pad[0].y) * a;
+  if (snap) {
+    if (G.phase === 'playing') {
+      const age = Math.min(0.12, (now - snap.t) / 1000);
+      const tx = clamp(snap.x + snap.vx * age, PUCK_R, W - PUCK_R), ty = snap.y + snap.vy * age;
+      if (Math.hypot(tx - puckView.x, ty - puckView.y) > 120) { puckView.x = tx; puckView.y = ty; }
+      else { const k = 1 - Math.exp(-28 * dt); puckView.x += (tx - puckView.x) * k; puckView.y += (ty - puckView.y) * k; }
+    } else { puckView.x = snap.x; puckView.y = snap.y; }
+  }
+}
+
+let lastT = performance.now();
+function frame(now) {
+  requestAnimationFrame(frame);
+  const dt = Math.min(0.05, Math.max(0.001, (now - lastT) / 1000));
+  lastT = now;
+  if (G.mode === 'idle' || G.phase === 'idle' || G.phase === 'waiting') return;
+  if (G.mode === 'guest') updateGuest(dt, now); else updateHost(dt, now);
+  draw();
+  updateUI();
+}
+
+/* =====================================================================
+   UI
+   ===================================================================== */
+const setText = (el, t) => { t = String(t); if (el.textContent !== t) el.textContent = t; };
+function setStatus(msg, kind) { const el = $('homeStatus'); el.textContent = msg || ''; el.className = 'status' + (kind ? ' ' + kind : ''); }
+function setBusy(on) {
+  ['btnCreate', 'btnJoin'].forEach(id => { $(id).disabled = on; });
+  document.querySelectorAll('.lvl').forEach(b => { b.disabled = on; });
+}
+function showScreen(name) {
+  for (const s of ['home', 'lobby', 'game']) $(s).classList.toggle('hidden', s !== name);
+  if (name === 'game') {
+    $('sideYou').style.setProperty('--c', COLORS[G.me]);
+    $('sideOpp').style.setProperty('--c', COLORS[1 - G.me]);
+    lastCount = 0; lastPhase = '';
+    resize(); buildTable();
+  }
+}
+
+let lastCount = 0, lastPhase = '';
+function updateUI() {
+  const me = G.me, opp = 1 - me;
+  setText($('nmYou'), G.names[me] + ' (you)'); setText($('scYou'), G.scores[me]);
+  setText($('nmOpp'), G.names[opp]);           setText($('scOpp'), G.scores[opp]);
+  let big = '', sub = '', act = false;
+  if (G.phase === 'countdown') {
+    const n = Math.max(1, Math.ceil(G.timer));
+    big = String(n);
+    sub = G.scores[0] + G.scores[1] === 0 ? 'Move your mouse or drag to control your paddle' : '';
+    if (n !== lastCount) { lastCount = n; playEvent('c', 0); }
+  } else if (G.phase === 'goal') {
+    big = 'GOAL!'; sub = G.names[G.lastScorer] + ' scores';
+  } else if (G.phase === 'over') {
+    big = G.lastScorer === me ? 'You win!' : 'You lose';
+    sub = G.scores[me] + ' – ' + G.scores[opp]; act = true;
+  }
+  if (G.phase !== 'countdown') lastCount = 0;
+  if (lastPhase === 'countdown' && G.phase === 'playing') playEvent('go', 0);
+  lastPhase = G.phase;
+  setText($('big'), big); $('big').dataset.k = G.phase;
+  setText($('sub'), sub);
+  $('actions').classList.toggle('hidden', !act);
+  $('overlay').classList.toggle('dim', G.phase === 'over');
+}
+
+function beginMatch() {
+  resetMatch();
+  input.x = W / 2; input.y = G.me === 0 ? H - 110 : 110;
+  showScreen('game');
+}
+const LEVELS = { easy: 'Easy', medium: 'Medium', hard: 'Hard' };
+function startCpu(level) {
+  ensureAudio();
+  leaveAll();
+  G.mode = 'cpu'; G.me = 0;
+  G.level = LEVELS[level] ? level : 'medium';
+  try { localStorage.setItem('ah_level', G.level); } catch (e) {}
+  G.names = [getName() || 'You', 'CPU · ' + LEVELS[G.level]];
+  setStatus('');
+  beginMatch();
+}
+function leaveToHome() { leaveAll(); showScreen('home'); setStatus(''); }
+function rematch() {
+  ensureAudio();
+  if (G.mode === 'guest') { if (conn && conn.open) { try { conn.send({ t: 'rematch' }); } catch (e) {} } }
+  else if (G.phase === 'over') beginMatch();
+}
+async function copyText(txt) {
+  try { await navigator.clipboard.writeText(txt); return true; }
+  catch (e) {
+    const ta = document.createElement('textarea');
+    ta.value = txt; ta.style.cssText = 'position:fixed;opacity:0';
+    document.body.appendChild(ta); ta.select();
+    let ok = false; try { ok = document.execCommand('copy'); } catch (_) {}
+    ta.remove(); return ok;
+  }
+}
+
+/* wire up the buttons */
+$('btnCreate').onclick = createRoom;
+document.querySelectorAll('.lvl').forEach(b => { b.onclick = () => startCpu(b.dataset.level); });
+let lastLevel = 'medium';
+try { lastLevel = localStorage.getItem('ah_level') || 'medium'; } catch (e) {}
+document.querySelectorAll('.lvl').forEach(b => b.classList.toggle('last', b.dataset.level === lastLevel));
+$('joinForm').addEventListener('submit', e => {
+  e.preventDefault();
+  const code = $('codeInput').value.trim().toUpperCase();
+  if (code.length !== 5) { setStatus('Enter the 5-character room code.', 'err'); return; }
+  joinRoom(code);
+});
+$('codeInput').addEventListener('input', e => {
+  e.target.value = e.target.value.toUpperCase().split('').filter(ch => CODE_CHARS.includes(ch)).join('');
+});
+$('btnCopy').onclick = async () => {
+  const ok = await copyText(inviteLink());
+  $('btnCopy').textContent = ok ? 'Link copied ✓' : 'Copy failed — share the code instead';
+  setTimeout(() => { $('btnCopy').textContent = 'Copy invite link'; }, 2000);
+};
+if (navigator.share) {
+  $('btnShare').classList.remove('hidden');
+  $('btnShare').onclick = () => navigator.share({ title: 'Air Hockey', text: 'Play air hockey with me!', url: inviteLink() }).catch(() => {});
+}
+$('btnCancel').onclick = leaveToHome;
+$('btnLeave').onclick = leaveToHome;
+$('btnLeave2').onclick = leaveToHome;
+$('btnRematch').onclick = rematch;
+function paintMute() { $('btnMute').textContent = muted ? '🔇' : '🔊'; }
+$('btnMute').onclick = () => {
+  muted = !muted; paintMute(); ensureAudio();
+  try { localStorage.setItem('ah_muted', muted ? '1' : '0'); } catch (e) {}
+};
+paintMute();
+
+/* restore name + handle invite links (?room=ABCDE) */
+try { $('nameInput').value = localStorage.getItem('ah_name') || ''; } catch (e) {}
+const invited = (new URLSearchParams(location.search).get('room') || '').toUpperCase();
+if (invited.length === 5 && [...invited].every(ch => CODE_CHARS.includes(ch))) {
+  $('codeInput').value = invited;
+  $('invite').textContent = "You've been invited to room " + invited + ' — enter your name and tap Join.';
+  $('invite').classList.remove('hidden');
+}
+
+requestAnimationFrame(frame);
+})();
+</script>
+</body>
+</html>
