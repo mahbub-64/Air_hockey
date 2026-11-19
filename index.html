@@ -1,0 +1,336 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+  <meta name="theme-color" content="#070814">
+  <meta name="description" content="Fast, responsive 2-player neon arcade Air Hockey game with realistic physics, multi-touch support, keyboard/mouse controls, and procedural sound effects.">
+  <title>Neon Air Hockey - 2 Player Arcade</title>
+  <link rel="stylesheet" href="style.css">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@500;700;900&family=Rajdhani:wght@500;600;700&display=swap" rel="stylesheet">
+  <!-- PeerJS for serverless WebRTC peer-to-peer connections -->
+  <script src="https://unpkg.com/peerjs@1.5.4/dist/peerjs.min.js"></script>
+</head>
+<body>
+  <div id="game-app">
+    <!-- Top HUD Navigation / Control Bar -->
+    <header class="game-hud">
+      <div class="hud-left">
+        <h1 class="logo">
+          <span class="logo-neon-p2">NEON</span>
+          <span class="logo-divider">AIR</span>
+          <span class="logo-neon-p1">HOCKEY</span>
+        </h1>
+        <div class="target-badge" id="target-score-badge" title="Target Score">FIRST TO 7</div>
+      </div>
+
+      <div class="hud-center">
+        <!-- Live Mini Score display on top bar for small screens -->
+        <div class="mini-score">
+          <span class="p2-mini-score" id="p2-mini-score">0</span>
+          <span class="score-dash">:</span>
+          <span class="p1-mini-score" id="p1-mini-score">0</span>
+        </div>
+      </div>
+
+      <div class="hud-right">
+        <!-- Main Menu Button -->
+        <button id="menu-btn" class="hud-btn" aria-label="Main Menu" title="Main Menu / Mode Select">
+          <span class="btn-icon">🏠</span>
+          <span class="btn-label">MENU</span>
+        </button>
+
+        <!-- Mode Switcher: 2-Player Local vs Player vs AI vs Online -->
+        <button id="mode-btn" class="hud-btn mode-btn" aria-label="Toggle Game Mode" title="Toggle 2-Player / AI / Online Mode">
+          <span class="btn-icon">👥</span>
+          <span class="btn-label" id="mode-label">2-PLAYER</span>
+        </button>
+
+        <!-- Online mode indicator (shown when in online game) -->
+        <div id="net-status-pill" class="net-status-pill hidden" title="Network Status">
+          <span class="net-dot" id="net-dot"></span>
+          <span id="net-status-text">CONNECTING…</span>
+          <span id="net-ping-text" class="net-ping"></span>
+        </div>
+
+        <!-- Sound Toggle -->
+        <button id="sound-btn" class="hud-btn icon-btn" aria-label="Toggle Sound" title="Toggle Sound">
+          <span id="sound-icon" class="btn-icon">🔊</span>
+        </button>
+
+        <!-- Help / Controls -->
+        <button id="help-btn" class="hud-btn icon-btn" aria-label="Show Controls Help" title="Controls &amp; Help">
+          <span class="btn-icon">❓</span>
+        </button>
+
+        <!-- Pause / Resume -->
+        <button id="pause-btn" class="hud-btn icon-btn" aria-label="Pause Game" title="Pause Game (Esc / Space)">
+          <span id="pause-icon" class="btn-icon">⏸️</span>
+        </button>
+      </div>
+    </header>
+
+    <!-- Main Game Table Stage Area -->
+    <main class="game-stage">
+      <div class="canvas-wrapper" id="canvas-container">
+        <canvas id="air-hockey-canvas" width="640" height="1000"></canvas>
+
+        <!-- Mobile Touch Hints (Fade out after initial play) -->
+        <div class="touch-hint top-hint" id="top-touch-hint">
+          <span class="hint-pulse"></span>
+          <span class="hint-text" id="top-hint-text">PLAYER 2 (ARROW KEYS / TOUCH)</span>
+        </div>
+
+        <div class="touch-hint bottom-hint" id="bottom-touch-hint">
+          <span class="hint-pulse"></span>
+          <span class="hint-text" id="bottom-hint-text">PLAYER 1 (WASD / MOUSE / TOUCH)</span>
+        </div>
+
+        <!-- Floating Goal Banner Notification -->
+        <div class="goal-banner" id="goal-banner" aria-live="assertive">
+          <div class="goal-text">GOAL!</div>
+          <div class="goal-scorer" id="goal-scorer-text">PLAYER 1 SCORES</div>
+        </div>
+      </div>
+    </main>
+
+    <!-- Bottom Quick Control Bar (Helpful on Mobile & Desktop) -->
+    <footer class="game-footer">
+      <div class="controls-legend">
+        <span class="p2-legend"><span class="legend-dot p2-dot"></span> <strong>P2:</strong> Touch Top / Arrow Keys</span>
+        <span class="legend-separator">|</span>
+        <span class="p1-legend"><span class="legend-dot p1-dot"></span> <strong>P1:</strong> Touch Bottom / WASD / Mouse</span>
+      </div>
+      <div class="footer-actions">
+        <button id="reset-round-btn" class="footer-btn" title="Reset Puck to Center">Reset Puck</button>
+        <button id="new-game-btn" class="footer-btn" title="Start a fresh match">New Match</button>
+      </div>
+    </footer>
+
+    <!-- MAIN MENU / LOGIN / START SCREEN (Visible by default on startup) -->
+    <div class="modal-overlay" id="main-menu-modal" role="dialog" aria-modal="true" aria-labelledby="menu-main-title">
+      <div class="modal-card menu-card">
+        <div class="menu-hero">
+          <div class="menu-puck-icon">⚡</div>
+          <h1 id="menu-main-title" class="menu-title">
+            <span class="logo-neon-p2">NEON</span>
+            <span class="logo-divider">AIR</span>
+            <span class="logo-neon-p1">HOCKEY</span>
+          </h1>
+          <p class="menu-tagline">ARCADE BATTLE ARENA</p>
+        </div>
+
+        <div class="menu-modes">
+          <button class="mode-select-btn p1-glow-card" id="menu-btn-2p" title="Play on the same screen">
+            <div class="mode-btn-icon">👥</div>
+            <div class="mode-btn-info">
+              <span class="mode-btn-title">LOCAL 2-PLAYER</span>
+              <span class="mode-btn-desc">Play on this screen (Touch, WASD / Arrows, Mouse)</span>
+            </div>
+            <span class="mode-btn-arrow">▶</span>
+          </button>
+
+          <button class="mode-select-btn p2-glow-card" id="menu-btn-ai" title="Play against Computer AI">
+            <div class="mode-btn-icon">🤖</div>
+            <div class="mode-btn-info">
+              <span class="mode-btn-title">SOLO VS COMPUTER</span>
+              <span class="mode-btn-desc">Practice against smart adaptive arcade AI</span>
+            </div>
+            <span class="mode-btn-arrow">▶</span>
+          </button>
+
+          <button class="mode-select-btn online-glow-card" id="menu-btn-online" title="Play with a friend online">
+            <div class="mode-btn-icon">🌐</div>
+            <div class="mode-btn-info">
+              <span class="mode-btn-title">ONLINE MULTIPLAYER</span>
+              <span class="mode-btn-desc">Private Room Code or Invite Link via WebRTC</span>
+            </div>
+            <span class="mode-btn-arrow">▶</span>
+          </button>
+        </div>
+
+        <div class="menu-footer-actions">
+          <button id="menu-help-btn" class="hud-btn" title="How to Play & Controls">
+            <span class="btn-icon">❓</span> HOW TO PLAY
+          </button>
+          <button id="menu-sound-btn" class="hud-btn" title="Toggle Sound">
+            <span id="menu-sound-icon" class="btn-icon">🔊</span> SOUND
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <!-- PAUSE MODAL OVERLAY -->
+    <div class="modal-overlay hidden" id="pause-modal" role="dialog" aria-modal="true" aria-labelledby="pause-title">
+      <div class="modal-card">
+        <h2 id="pause-title" class="modal-title">GAME PAUSED</h2>
+        <div class="modal-body">
+          <div class="modal-score-summary">
+            <div class="score-player p2-score-box">
+              <span class="player-tag">PLAYER 2</span>
+              <span class="score-large" id="modal-p2-score">0</span>
+            </div>
+            <div class="score-vs">VS</div>
+            <div class="score-player p1-score-box">
+              <span class="player-tag">PLAYER 1</span>
+              <span class="score-large" id="modal-p1-score">0</span>
+            </div>
+          </div>
+          <p class="modal-hint">First player to 7 goals wins the trophy!</p>
+        </div>
+        <div class="modal-actions">
+          <button id="resume-btn" class="glow-btn primary-btn">RESUME GAME</button>
+          <button id="pause-mode-btn" class="glow-btn secondary-btn">SWITCH TO VS AI</button>
+          <button id="pause-restart-btn" class="glow-btn danger-btn">RESTART MATCH</button>
+          <button id="pause-menu-btn" class="glow-btn secondary-btn">MAIN MENU</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- GAME OVER / VICTORY MODAL OVERLAY -->
+    <div class="modal-overlay hidden" id="gameover-modal" role="dialog" aria-modal="true" aria-labelledby="winner-title">
+      <div class="modal-card winner-card">
+        <div class="trophy-icon">🏆</div>
+        <h2 id="winner-title" class="winner-title">PLAYER 1 WINS!</h2>
+        <p class="winner-subtitle">CHAMPION OF THE NEON ARENA</p>
+
+        <div class="final-score-display">
+          <div class="final-player final-p2">
+            <span class="final-name" id="final-p2-name">PLAYER 2</span>
+            <span class="final-digit" id="final-p2-score">0</span>
+          </div>
+          <span class="final-colon">:</span>
+          <div class="final-player final-p1">
+            <span class="final-name" id="final-p1-name">PLAYER 1</span>
+            <span class="final-digit" id="final-p1-score">7</span>
+          </div>
+        </div>
+
+        <div class="modal-actions">
+          <button id="rematch-btn" class="glow-btn primary-btn pulse-glow">INSTANT REMATCH</button>
+          <button id="gameover-mode-btn" class="glow-btn secondary-btn">TOGGLE VS AI</button>
+          <button id="gameover-menu-btn" class="glow-btn secondary-btn">MAIN MENU</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- ONLINE LOBBY MODAL -->
+    <div class="modal-overlay hidden" id="online-modal" role="dialog" aria-modal="true" aria-labelledby="online-title">
+      <div class="modal-card online-card">
+        <h2 id="online-title" class="modal-title">🌐 ONLINE MULTIPLAYER</h2>
+        <p class="modal-hint" style="margin-bottom:18px;">Play with a friend on a different device — no server, no account needed. Uses peer-to-peer WebRTC.</p>
+
+        <!-- Tab Switcher -->
+        <div class="online-tabs">
+          <button class="online-tab active" id="tab-create" data-tab="create">CREATE ROOM</button>
+          <button class="online-tab" id="tab-join" data-tab="join">JOIN ROOM</button>
+        </div>
+
+        <!-- CREATE ROOM Panel -->
+        <div class="online-panel" id="panel-create">
+          <div id="create-idle-state">
+            <p class="online-desc">Generate a 4-character room code and share it with your friend.</p>
+            <button id="create-room-btn" class="glow-btn primary-btn" style="margin-top:14px;">GENERATE ROOM CODE</button>
+          </div>
+          <div id="create-waiting-state" class="hidden">
+            <p class="online-desc">Share this code or link with your opponent:</p>
+            <div class="room-code-display">
+              <span id="room-code-text">----</span>
+            </div>
+            <div class="online-link-row">
+              <input type="text" id="room-link-input" class="room-link-input" readonly>
+              <button id="copy-link-btn" class="copy-btn" title="Copy link">📋 COPY</button>
+            </div>
+            <div class="waiting-indicator">
+              <span class="waiting-dot"></span>
+              <span class="waiting-dot"></span>
+              <span class="waiting-dot"></span>
+              <span id="waiting-label">Waiting for opponent…</span>
+            </div>
+            <button id="cancel-host-btn" class="glow-btn danger-btn" style="margin-top:12px;">CANCEL</button>
+          </div>
+        </div>
+
+        <!-- JOIN ROOM Panel -->
+        <div class="online-panel hidden" id="panel-join">
+          <p class="online-desc">Enter the 4-character code your friend sent you:</p>
+          <div class="join-input-row">
+            <input type="text" id="join-code-input" class="join-code-input"
+              placeholder="ABCD" maxlength="4" autocomplete="off" autocapitalize="characters" spellcheck="false">
+            <button id="join-room-btn" class="glow-btn primary-btn">JOIN</button>
+          </div>
+          <div id="join-status-msg" class="join-status hidden"></div>
+          <button id="cancel-join-btn" class="glow-btn danger-btn" style="margin-top:12px;">CANCEL</button>
+        </div>
+
+        <div class="modal-actions" style="margin-top:16px;">
+          <button id="close-online-btn" class="glow-btn secondary-btn">BACK TO LOCAL</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- ONLINE DISCONNECTED TOAST -->
+    <div class="dc-toast hidden" id="dc-toast">
+      <span>⚠️</span> <span id="dc-toast-text">Opponent disconnected</span>
+    </div>
+
+    <!-- Fix 4: DISCONNECT FULL-SCREEN OVERLAY -->
+    <div class="dc-overlay hidden" id="dc-overlay" role="alertdialog" aria-modal="true" aria-labelledby="dc-title">
+      <div class="dc-overlay-card">
+        <div class="dc-icon">📡</div>
+        <h2 class="dc-title" id="dc-title">OPPONENT DISCONNECTED</h2>
+        <p class="dc-reason" id="dc-reason">Your opponent has disconnected or left the online room.</p>
+        <div class="dc-actions">
+          <button id="dc-menu-btn" class="glow-btn primary-btn">RETURN TO MENU</button>
+          <button id="dc-rematch-btn" class="glow-btn secondary-btn">FIND NEW OPPONENT</button>
+          <button id="dc-local-btn" class="glow-btn secondary-btn">PLAY LOCAL 2-PLAYER</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- CONTROLS & HELP MODAL -->
+    <div class="modal-overlay hidden" id="help-modal" role="dialog" aria-modal="true" aria-labelledby="help-title">
+      <div class="modal-card help-card">
+        <h2 id="help-title" class="modal-title">HOW TO PLAY</h2>
+        <div class="help-grid">
+          <div class="help-section p1-help">
+            <h3 class="section-title p1-color">PLAYER 1 (Bottom Half)</h3>
+            <ul class="help-list">
+              <li><strong>📱 Mobile / Tablet:</strong> Touch and drag anywhere on the bottom half of the table.</li>
+              <li><strong>🖱️ Desktop Mouse:</strong> Move cursor inside the bottom half. Striker follows cursor seamlessly.</li>
+              <li><strong>⌨️ Desktop Keyboard:</strong> Use <kbd>W</kbd> <kbd>A</kbd> <kbd>S</kbd> <kbd>D</kbd> keys to move with high-speed arcade acceleration.</li>
+            </ul>
+          </div>
+
+          <div class="help-section p2-help">
+            <h3 class="section-title p2-color">PLAYER 2 / AI (Top Half)</h3>
+            <ul class="help-list">
+              <li><strong>📱 Mobile / Tablet:</strong> Touch and drag anywhere on the top half of the table simultaneously!</li>
+              <li><strong>⌨️ Desktop Keyboard:</strong> Use <kbd>▲</kbd> <kbd>▼</kbd> <kbd>◄</kbd> <kbd>►</kbd> Arrow keys.</li>
+              <li><strong>🤖 Solo Practice:</strong> Switch to <em>VS AI</em> mode in the top menu to play against the computer.</li>
+            </ul>
+          </div>
+
+          <div class="help-section general-help">
+            <h3 class="section-title">RULES &amp; TIPS</h3>
+            <ul class="help-list">
+              <li>Neither striker can cross the center line. Defend your half!</li>
+              <li>Hit the puck while moving forward to deliver a high-velocity power smash!</li>
+              <li>Bank shots off the side rails and rounded corners to bypass your opponent's striker.</li>
+              <li>First player to score <strong>7 goals</strong> wins the match!</li>
+            </ul>
+          </div>
+        </div>
+
+        <div class="modal-actions">
+          <button id="close-help-btn" class="glow-btn primary-btn">GOT IT, LET'S PLAY!</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script src="game.js"></script>
+</body>
+</html>
